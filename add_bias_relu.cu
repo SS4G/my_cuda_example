@@ -1,5 +1,5 @@
 #include <iostream>
-// https://zhuanlan.zhihu.com/p/410278370
+
 typedef struct matrix
 {
     int width;    /* data */

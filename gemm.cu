@@ -183,8 +183,8 @@ void GemmGPU(Matrix* m1, Matrix *m2, Matrix *out) {
     dim3 grids(GRID_X, GRID_Y);// kernel调用
 
     double start = cpuSecond();
-    //GemmGPUSharedFunc<<<grids, blocks>>>(m1, m2, out);
-    GemmGPUFunc<<<grids, blocks>>>(m1, m2, out);
+    GemmGPUSharedFunc<<<grids, blocks>>>(m1, m2, out);
+    //GemmGPUFunc<<<grids, blocks>>>(m1, m2, out);
     cudaDeviceSynchronize();
     double end = cpuSecond();
     std::cout << "GemmGPU elapse:" << end - start << std::endl;

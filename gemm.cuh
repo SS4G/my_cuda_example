@@ -2,7 +2,7 @@
 // CUDA runtime
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
-#define BLOCK_SIZE 32
+#define BLOCK_SIZE 16
 // CUDA and CUBLAS functions
 //#include <helper_functions.h>
 //#include <helper_cuda.h>
@@ -34,11 +34,12 @@ __global__ void GemmGPUFunc(Matrix* A, Matrix* B, Matrix* C) {
 }
 
 // 使用shared memory 优化后的计算 大概加速8~10倍
+// 具体参考 https://chiemon.github.io/2020/02/06/CUDA-%E7%9F%A9%E9%98%B5%E4%B9%98%E6%B3%95-%E4%BC%98%E5%8C%96%E5%8F%8A%E6%80%A7%E8%83%BD%E5%88%86%E6%9E%90-%E4%B8%8A.html
 __global__ void GemmGPUSharedFunc(Matrix* A, Matrix* B, Matrix* C)
 {
-    int m = A -> height;
-    int n = B -> width; 
-    int k = A -> width;
+    int m = A -> height; // A = m x k
+    int n = B -> width;  // B = k x n
+    int k = A -> width;  // C = m x n
     int nRow = blockIdx.y * blockDim.y + threadIdx.y;
     int nCol = blockIdx.x * blockDim.x + threadIdx.x;
     float fCVal = 0.0f;
@@ -46,7 +47,7 @@ __global__ void GemmGPUSharedFunc(Matrix* A, Matrix* B, Matrix* C)
     __shared__ float shTileA[BLOCK_SIZE][BLOCK_SIZE];
     __shared__ float shTileB[BLOCK_SIZE][BLOCK_SIZE];
 
-    int nIter = (k + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    int nIter = (k + BLOCK_SIZE - 1) / BLOCK_SIZE; // k 维度上的迭代步数
     for(int i = 0; i < nIter; i++)
     {
         // load data from global memory to shared memory
@@ -57,6 +58,7 @@ __global__ void GemmGPUSharedFunc(Matrix* A, Matrix* B, Matrix* C)
         __syncthreads();
 
         // sub-matrix multiply
+        #pragma unroll
         for(int l = 0; l < BLOCK_SIZE; l++)
         {
             fCVal += shTileA[threadIdx.y][l] * shTileB[l][threadIdx.x];

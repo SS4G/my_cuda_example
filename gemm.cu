@@ -12,7 +12,7 @@ double cpuSecond()
   gettimeofday(&tp,NULL);
   return((double)tp.tv_sec+(double)tp.tv_usec*1e-6);
 }
-#define TEST_SIZE 1000
+#define TEST_SIZE 6400
 #define EPS 1e-4
 
 /*
@@ -35,6 +35,7 @@ float GetMatValCPU(Matrix *m, int rowIdx, int colIdx) {
 }
 
 void GemmCPU(Matrix* m1, Matrix *m2, Matrix *out) {
+    std::cout << "GemmCPU start" << std::endl;
     CHECK_STATUS(m1->width == m2->height, "gemm invlid size");
     double start = cpuSecond();
     for (size_t i = 0; i < m1 -> height; i++) {
@@ -48,6 +49,7 @@ void GemmCPU(Matrix* m1, Matrix *m2, Matrix *out) {
     }
     double end = cpuSecond();
     std::cout << "GemmCPU elapse:" << end - start << std::endl;
+    std::cout << "GemmCPU end" << std::endl;
 }
 
 Matrix* NewMatrixCPU(size_t height, size_t width) {
@@ -172,19 +174,21 @@ void FreeMatrixGPU(Matrix* m1) {
 }
 
 void GemmGPU(Matrix* m1, Matrix *m2, Matrix *out) {
+    std::cout << "GemmGPU start" << std::endl;
     //CHECK_STATUS(m1->width == m2->height, "gemm invlid size");
-    int BLOCK_X = 32; int BLOCK_Y = 32;
-    //int GRID_X = (m2 -> width + BLOCK_X - 1) / BLOCK_X; int GRID_Y = (m1 -> height + BLOCK_Y - 1) / BLOCK_Y;
-    //printf("GRID_X=%d, GRID_Y=%d", GRID_X, GRID_Y);
+    int GRID_X = (TEST_SIZE + BLOCK_SIZE - 1) / BLOCK_SIZE; int GRID_Y = (TEST_SIZE + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    std::cout << "GRID_X=" << GRID_X << "  GRID_Y=" << GRID_Y << std::endl;
 
-    dim3 blocks(BLOCK_X, BLOCK_Y);
-    dim3 grids(TEST_SIZE, TEST_SIZE);// kernel调用
+    dim3 blocks(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 grids(GRID_X, GRID_Y);// kernel调用
 
     double start = cpuSecond();
+    //GemmGPUSharedFunc<<<grids, blocks>>>(m1, m2, out);
     GemmGPUFunc<<<grids, blocks>>>(m1, m2, out);
     cudaDeviceSynchronize();
     double end = cpuSecond();
     std::cout << "GemmGPU elapse:" << end - start << std::endl;
+    std::cout << "GemmGPU end" << std::endl;
 }
 
 void GPUTest() {
@@ -193,13 +197,16 @@ void GPUTest() {
     Matrix* m1CPU = NewMatrixCPU(TEST_SIZE, TEST_SIZE);
     Matrix* m2CPU = NewMatrixCPU(TEST_SIZE, TEST_SIZE);
     Matrix* mResCPU = NewMatrixCPU(TEST_SIZE, TEST_SIZE); // 标准答案
+    Matrix* mResCPU2 = NewMatrixCPU(TEST_SIZE, TEST_SIZE); // 标准答案
+
     //Matrix* mResCPU = NewMatrixCPU(3, 3); // 计算答案
 
     RandomFillMatrixCPU(m1CPU);
     RandomFillMatrixCPU(m2CPU);
     //RandomFillMatrixCPU();
-    GemmCPU(m1CPU, m2CPU, mResCPU);
+    //GemmCPU(m1CPU, m2CPU, mResCPU);
 
+    // 使用常规GPU
     Matrix* m1GPU = NewMatrixGPUFromCPU(m1CPU);
     //std::cout << "malloc gpu1" << std::endl;
 
@@ -208,7 +215,7 @@ void GPUTest() {
 
     Matrix* mResGPU = NewMatrixGPU(m1CPU->height, m2CPU->width); // 计算答案
     //std::cout << "malloc gpu3" << std::endl;
-
+    //GemmGPUCuBlas(m1CPU, m2CPU, mResCPU2);
     GemmGPU(m1GPU, m2GPU, mResGPU);
     //std::cout << "GemmGPU done" << std::endl;
 
@@ -219,6 +226,7 @@ void GPUTest() {
         PrintMatrix(m2CPU, "m2CPU");
         PrintMatrix(mResCPU, "mResCPU");
         PrintMatrix(mResCPULoad, "mResCPULoad");
+        //PrintMatrix(mResCPU2, "mResCPU2");
     }
     
     bool cmpRes = CompareMatrixCPU(mResCPU, mResCPULoad);

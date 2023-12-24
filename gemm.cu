@@ -3,6 +3,8 @@
 #include <ctime>
 #include <sys/time.h>
 #include <cuda_runtime.h>
+#include "gemm.h"
+#include "gemm.cuh"
 
 double cpuSecond()
 {
@@ -10,14 +12,8 @@ double cpuSecond()
   gettimeofday(&tp,NULL);
   return((double)tp.tv_sec+(double)tp.tv_usec*1e-6);
 }
-
+#define TEST_SIZE 1000
 #define EPS 1e-4
-typedef struct matrix
-{
-    size_t height;
-    size_t width;    /* data */
-    float* data; 
-} Matrix;
 
 /*
  * CPU 矩阵相关函数
@@ -118,7 +114,6 @@ bool CompareMatrixCPU(Matrix* m1, Matrix* m2) {
     return diff < EPS;
 }
 
-
 /*
  * GPU 矩阵相关函数
  */
@@ -176,32 +171,6 @@ void FreeMatrixGPU(Matrix* m1) {
     cudaFree(m1);
 }
 
-__device__ void SetMatValGPU(Matrix *m, int rowIdx, int colIdx, float val) {
-    m->data[rowIdx * (m -> width) + colIdx] = val;
-    //m->data[0] = val;
-}
-
-__device__ float GetMatValGPU(Matrix *m, int rowIdx, int colIdx) {
-    return m->data[rowIdx * (m -> width) + colIdx];
-}
-
-__global__ void GemmGPUFunc(Matrix* A, Matrix* B, Matrix* C) {
-    int k = blockIdx.x * blockDim.x + threadIdx.x;
-    int i = blockIdx.y * blockDim.y + threadIdx.y;
-    //printf("blockIdx.x=%d blockIdx.y=%d threadIdx.x=%d threadIdx.y=%d\n", blockIdx.x, blockIdx.y, threadIdx.x, threadIdx.y);
-    //printf("matIdx=(%02d, %02d)\n", i, k);
-    //C->data[i * (C -> width) + k] = 1.0;
-    //setMatVal(C, i, k, 5.0);
-    if (i < A->height && k < B->width) {
-        float res = 0;
-        for (int j = 0 ; j < (A->width); j++) {
-            //printf("A[%d][%d]=%f B[%d][%d]=%f\n", i, j, getMatVal(A, i, j), j, k, getMatVal(B, j, k));
-            res += GetMatValGPU(A, i, j) * GetMatValGPU(B, j, k);
-        }
-        SetMatValGPU(C, i, k, res);
-    }
-}
-
 void GemmGPU(Matrix* m1, Matrix *m2, Matrix *out) {
     //CHECK_STATUS(m1->width == m2->height, "gemm invlid size");
     int BLOCK_X = 32; int BLOCK_Y = 32;
@@ -209,7 +178,7 @@ void GemmGPU(Matrix* m1, Matrix *m2, Matrix *out) {
     //printf("GRID_X=%d, GRID_Y=%d", GRID_X, GRID_Y);
 
     dim3 blocks(BLOCK_X, BLOCK_Y);
-    dim3 grids(5, 5);// kernel调用
+    dim3 grids(TEST_SIZE, TEST_SIZE);// kernel调用
 
     double start = cpuSecond();
     GemmGPUFunc<<<grids, blocks>>>(m1, m2, out);
@@ -219,12 +188,11 @@ void GemmGPU(Matrix* m1, Matrix *m2, Matrix *out) {
 }
 
 void GPUTest() {
-    bool printDebugFlag = true;
+    bool printDebugFlag = false;
     // mat1 = np.array([[1, 2, 3], [1, 2, 3], [1, 2, 3]])
-
-    Matrix* m1CPU = NewMatrixCPU(3, 3);
-    Matrix* m2CPU = NewMatrixCPU(3, 3);
-    Matrix* mResCPU = NewMatrixCPU(3, 3); // 标准答案
+    Matrix* m1CPU = NewMatrixCPU(TEST_SIZE, TEST_SIZE);
+    Matrix* m2CPU = NewMatrixCPU(TEST_SIZE, TEST_SIZE);
+    Matrix* mResCPU = NewMatrixCPU(TEST_SIZE, TEST_SIZE); // 标准答案
     //Matrix* mResCPU = NewMatrixCPU(3, 3); // 计算答案
 
     RandomFillMatrixCPU(m1CPU);
